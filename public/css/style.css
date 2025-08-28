@@ -1,6 +1,6 @@
 /* General Styles */
 :root {
-    --primary-color: #3E8EFB;
+    --primary-color: #3182F6;
     --secondary-color: #1E40AF;
     --accent-color: #3B82F6;
     --text-color: #191F28;
@@ -17,58 +17,6 @@
     --sidebar-collapsed-width: 70px;
     --primary-600: #2f73e5;
     --primary-700: #265fbe;
-}
-
-/* Login Page Styles */
-.login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
-    background: var(--light-bg);
-    position: relative;
-    overflow: hidden;
-}
-
-.login-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-    opacity: 0.3;
-    z-index: 1;
-}
-
-.login-card {
-    width: 100%;
-    max-width: 450px;
-    margin: 0 auto;
-    transform: translateY(-20px);
-    position: relative;
-    z-index: 2;
-    animation: slideInUp 0.6s ease-out;
-}
-
-.login-card .card {
-    border: none;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-    backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.95);
-}
-
-@keyframes slideInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(-20px);
-    }
 }
 
 body {
@@ -95,7 +43,7 @@ body {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
     max-width: var(--sidebar-width);
-    background: var(--primary-color);
+    background: linear-gradient(180deg, #5fa8f5 0%, #3E8EFB 100%);
     color: #fff;
     transition: width 0.25s ease-in-out, min-width 0.25s ease-in-out;
     position: fixed;
@@ -203,12 +151,9 @@ body {
 }
 
 #sidebar ul li.active > a, #sidebar ul li a:active {
-    background: rgba(255,255,255,0.16);
-    color: #fff !important;
-    font-weight: 700;
+    background: rgba(255,255,255,0.2);
+    font-weight: 600;
 }
-#sidebar ul li.active > a i { color: #fff !important; }
-#sidebar ul li.active > a span { color: #fff !important; font-weight: 700; }
 
 #sidebar ul li a:hover {
     background: rgba(255,255,255,0.1);
@@ -321,21 +266,21 @@ body {
     margin-bottom: 8px;
     margin-left: 8px;
     margin-right: 8px;
-    padding: 28px 24px;
-    border-radius: 16px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    padding: 36px 32px;
+    border-radius: 20px;
+    box-shadow: 0 4px 24px rgba(30,64,175,0.07), 0 1.5px 4px rgba(0,0,0,0.03);
     background: #fff;
-    border: 1px solid #eef1f4;
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    border: none;
+    transition: box-shadow 0.2s, transform 0.2s;
 }
 .card:hover, .dashboard-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(30,64,175,0.12), 0 2px 8px rgba(0,0,0,0.04);
+    transform: translateY(-2px) scale(1.01);
 }
 
 .card-header {
-    background: #fff;
-    border-bottom: 1px solid #eef1f4;
+    background: transparent;
+    border-bottom: 1px solid var(--border-color);
     padding: 16px 24px;
     border-radius: 16px 16px 0 0 !important;
     margin-bottom: 16px;
@@ -375,7 +320,7 @@ body {
 }
 
 .table thead {
-    background: #f8f9fa;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
 .table thead th {
@@ -416,7 +361,7 @@ body {
 }
 
 .table tbody tr:hover {
-    background: #f8f9ff;
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
     transform: translateX(4px);
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
 }
@@ -565,7 +510,7 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary-color);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
@@ -586,11 +531,11 @@ body {
 }
 
 .btn-outline-primary:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: transparent;
     color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(49, 130, 246, 0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
 }
 
 .btn-outline-danger {
@@ -619,58 +564,13 @@ body {
     border: none;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
     overflow: hidden;
-    max-width: 85vw !important;
-    max-height: 80vh !important;
-    overflow-y: auto;
-    margin: 2.5vh auto !important;
-    width: auto !important;
-}
-
-.modal-dialog {
-    max-width: 500px !important;
-    margin: 1.75rem auto !important;
-    width: auto !important;
-}
-
-.modal {
-    padding-right: 0 !important;
-}
-
-@media (max-width: 768px) {
-    .modal-content {
-        max-width: 90vw !important;
-        max-height: 85vh !important;
-        margin: 2.5vh auto !important;
-        width: auto !important;
-    }
-    
-    .modal-dialog {
-        max-width: 90vw !important;
-        margin: 1rem auto !important;
-        width: auto !important;
-    }
-}
-
-@media (max-width: 576px) {
-    .modal-content {
-        max-width: 95vw !important;
-        max-height: 90vh !important;
-        margin: 2.5vh auto !important;
-        width: auto !important;
-    }
-    
-    .modal-dialog {
-        max-width: 95vw !important;
-        margin: 0.5rem auto !important;
-        width: auto !important;
-    }
 }
 
 .modal-header {
-    background: #fff;
-    border-bottom: 1px solid #eef1f4;
-    padding: 20px 24px;
-    color: var(--text-color);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-bottom: none;
+    padding: 24px 28px;
+    color: white;
 }
 
 .modal-header .modal-title {
@@ -690,21 +590,6 @@ body {
 .modal-body {
     padding: 28px;
     background: #fafbfc;
-    overflow-x: hidden;
-}
-
-.modal-body input[type="text"],
-.modal-body input[type="email"],
-.modal-body input[type="tel"] {
-    max-width: 100%;
-    box-sizing: border-box;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.modal-body .form-control {
-    max-width: 100%;
-    box-sizing: border-box;
 }
 
 .modal-footer {
@@ -949,7 +834,7 @@ body {
 .modern-search-item:hover,
 .modern-search-item.active {
     background: #eaf1fb;
-    color: var(--primary-color);
+    color: #3182F6;
     font-weight: 600;
 }
 
@@ -2019,13 +1904,13 @@ body {
 .table th:nth-child(10),.table td:nth-child(10){ width: 120px; }  /* 관리 (버튼 2개 공간 확보) */
 
 /* --- 컬럼 내용 정렬 --- */
-/* 숫자 및 금액: 중앙 정렬로 변경 */
+/* 숫자 및 금액: 오른쪽 정렬 */
 .table th:nth-child(6), .table td:nth-child(6),
 .table th:nth-child(7), .table td:nth-child(7),
 .table th:nth-child(8), .table td:nth-child(8),
 .table th:nth-child(9), .table td:nth-child(9) {
-  text-align: center !important;
-  padding-right: 0;
+  text-align: right;
+  padding-right: 1rem;
 }
 
 /* 관리 컬럼 버튼 스타일 */
@@ -2176,13 +2061,6 @@ body {
     padding: 2px 4px;
     border-radius: 3px;
     color: #856404;
-}
-
-.search-dropdown-item.selected {
-    background-color: #e3f2fd;
-    border-left: 3px solid #2196f3;
-    color: #1976d2;
-    font-weight: 600;
 }
 
 .modern-search-item {

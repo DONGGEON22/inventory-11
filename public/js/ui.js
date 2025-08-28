@@ -1,6 +1,5 @@
 // 공통 UI 함수들
 import { state, getCurrentCompanyBusinessNumber } from './main.js';
-import { logAccess } from './firestore-helper.js';
 
 // Loading Management
 export function showLoading(message = '로딩 중...', duration = 0) {
@@ -327,70 +326,33 @@ export function showModal(title, content) {
  * @param {Function} onSelect - 항목을 선택했을 때 실행될 콜백 함수
  */
 export function createSearchableDropdown(inputElement, data, onSelect) {
+    console.log('createSearchableDropdown 호출됨:', inputElement, data.length, '개 항목');
     
     // 1. 포털 드롭다운 생성 (body에 직접 추가)
     const dropdownPortal = document.createElement('div');
     dropdownPortal.className = 'search-dropdown-portal';
     dropdownPortal.style.display = 'none';
     document.body.appendChild(dropdownPortal);
-    
-    // 키보드 네비게이션을 위한 변수들
-    let selectedIndex = -1;
-    let filteredItems = [];
 
     // 2. 입력 이벤트 핸들러: 사용자가 입력할 때마다 목록 필터링
     inputElement.addEventListener('input', () => {
-        const query = inputElement.value.toLowerCase().trim();
-        filteredItems = data.filter(item => item.text.toLowerCase().includes(query));
-        selectedIndex = -1; // 입력 시 선택 인덱스 초기화
-        renderDropdownItems(filteredItems, query);
+        const query = inputElement.value.toLowerCase();
+        const filteredData = data.filter(item => item.text.toLowerCase().includes(query));
+        renderDropdownItems(filteredData, query);
         showDropdown();
     });
 
     // 3. 포커스/블러 이벤트 핸들러: 드롭다운 보이기/숨기기
     inputElement.addEventListener('focus', () => {
-        const query = inputElement.value.toLowerCase().trim();
-        filteredItems = data.filter(item => item.text.toLowerCase().includes(query));
-        renderDropdownItems(filteredItems, query);
+        const query = inputElement.value.toLowerCase();
+        const filteredData = data.filter(item => item.text.toLowerCase().includes(query));
+        renderDropdownItems(filteredData, query);
         showDropdown();
     });
     
     document.addEventListener('click', (e) => {
         if (!inputElement.contains(e.target) && !dropdownPortal.contains(e.target)) {
             hideDropdown();
-        }
-    });
-    
-    // 4. 키보드 이벤트 핸들러 추가
-    inputElement.addEventListener('keydown', (e) => {
-        if (!dropdownPortal.style.display || dropdownPortal.style.display === 'none') {
-            return;
-        }
-        
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                selectedIndex = Math.min(selectedIndex + 1, filteredItems.length - 1);
-                updateSelection();
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                selectedIndex = Math.max(selectedIndex - 1, -1);
-                updateSelection();
-                break;
-            case 'Enter':
-                e.preventDefault();
-                if (selectedIndex >= 0 && selectedIndex < filteredItems.length) {
-                    const selectedItem = filteredItems[selectedIndex];
-                    inputElement.value = selectedItem.text;
-                    hideDropdown();
-                    onSelect(selectedItem);
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                hideDropdown();
-                break;
         }
     });
 
@@ -435,56 +397,23 @@ export function createSearchableDropdown(inputElement, data, onSelect) {
         }
     }
 
-    // 5. 선택 상태 업데이트 함수
-    function updateSelection() {
-        const items = dropdownPortal.querySelectorAll('.search-dropdown-item');
-        items.forEach((item, index) => {
-            if (index === selectedIndex) {
-                item.classList.add('selected');
-                item.scrollIntoView({ block: 'nearest' });
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-    }
-    
-    // 6. 드롭다운 숨김 함수
+    // 5. 드롭다운 숨김 함수
     function hideDropdown() {
         dropdownPortal.style.display = 'none';
-        selectedIndex = -1;
     }
 
-    // 7. 드롭다운 목록 렌더링 함수
+    // 6. 드롭다운 목록 렌더링 함수
     function renderDropdownItems(items, query) {
         dropdownPortal.innerHTML = '';
         if (items.length === 0) {
             dropdownPortal.innerHTML = '<div class="search-dropdown-item disabled">검색 결과가 없습니다.</div>';
             return;
         }
-        items.forEach((item, index) => {
+        items.forEach(item => {
             const div = document.createElement('div');
             div.className = 'search-dropdown-item';
-            
-            // 검색어가 비어있거나 공백만 있는 경우 하이라이팅하지 않음
-            if (query && query.trim() !== '') {
-                // 검색어 하이라이팅 (공백 제외, 특수문자 이스케이프)
-                const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                try {
-                    div.innerHTML = item.text.replace(new RegExp(escapedQuery, 'gi'), (match) => `<span class="highlight">${match}</span>`);
-                } catch (error) {
-                    // 정규식 오류 시 하이라이팅 없이 표시
-                    console.warn('검색어 하이라이팅 오류:', error);
-                    div.innerHTML = item.text;
-                }
-            } else {
-                div.innerHTML = item.text;
-            }
-            
-            // 마우스 호버 시 선택 인덱스 업데이트
-            div.addEventListener('mouseenter', () => {
-                selectedIndex = index;
-                updateSelection();
-            });
+            // 검색어 하이라이팅
+            div.innerHTML = item.text.replace(new RegExp(query, 'gi'), (match) => `<span class="highlight">${match}</span>`);
             
             div.addEventListener('click', () => {
                 inputElement.value = item.text;
@@ -493,9 +422,6 @@ export function createSearchableDropdown(inputElement, data, onSelect) {
             });
             dropdownPortal.appendChild(div);
         });
-        
-        // 렌더링 후 선택 상태 업데이트
-        updateSelection();
     }
 }
 
@@ -779,7 +705,7 @@ export function closeModal(modalId = 'commonModal') {
             newModal.hide();
         }
     }
-}
+} 
 
 /**
  * 매입/매출 모달의 HTML을 동적으로 생성하는 공통 함수
@@ -870,7 +796,7 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         <td>
             <input type="text" class="form-control item-search" data-idx="${rowIdx}" 
                    placeholder="품목명 또는 코드 검색" autocomplete="off" 
-                   value="${itemDisplayText}">
+                   value="${itemDisplayText}" ${isEdit ? 'readonly' : ''}>
             <div class="searchable-select-dropdown"></div>
         </td>
         <td>
@@ -878,11 +804,8 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
                    min="1" placeholder="수량" value="${quantity}">
         </td>
         <td>
-            <div class="position-relative d-flex align-items-center">
-                <input type="number" class="form-control price-input" data-idx="${rowIdx}" 
-                       min="0" placeholder="단가" value="${price}" style="flex: 1; margin-right: 4px; min-width: 80px;">
-                <i class='bx bx-history text-muted' style="cursor: pointer; font-size: 12px; flex-shrink: 0; width: 16px;" title="최근 거래 내역"></i>
-            </div>
+            <input type="number" class="form-control price-input" data-idx="${rowIdx}" 
+                   min="0" placeholder="단가" value="${price}">
         </td>
         <td>
             <select class="form-select tax-type-select" data-idx="${rowIdx}">
@@ -893,7 +816,7 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         <td class="row-sum text-end" data-idx="${rowIdx}">₩0</td>
         <td style="text-align:center;">
             <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn" 
-                    title="행 삭제" ${isEdit ? 'style="display: none;"' : ''}>
+                    title="행 삭제" ${isEdit ? 'disabled' : ''}>
                 <i class='bx bx-minus'></i>
             </button>
         </td>
@@ -917,18 +840,12 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         const vat = taxType === 'taxFree' ? 0 : supplyAmount * 0.1;
         const total = supplyAmount + vat;
         
-        // 결과 표시 (row-sum에 총액만 표시)
-        const rowSumElement = row.querySelector('.row-sum');
-        if (rowSumElement) {
-            rowSumElement.textContent = formatCurrency(total);
-        }
+        // 결과 표시
+        row.querySelector('.supply-amount').textContent = formatCurrency(supplyAmount);
+        row.querySelector('.vat-amount').textContent = formatCurrency(vat);
+        row.querySelector('.total-amount').textContent = formatCurrency(total);
         
         console.log('행 계산 완료:', { quantity, price, supplyAmount, vat, total });
-        
-        // 전역 변수에 계산 결과 저장 (전체 합계 계산용)
-        row.supplyAmount = supplyAmount;
-        row.vatAmount = vat;
-        row.totalAmount = total;
     }
     
     quantityInput.addEventListener('input', () => {
@@ -946,8 +863,8 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         updateTotalsFunction();
     });
 
-    // 품목 검색 드롭다운 설정 (DOM 렌더링 완료 후 실행)
-    setTimeout(() => {
+    if (!isEdit) {
+        // 품목 검색 드롭다운 즉시 적용
         console.log('품목 드롭다운 설정 시작:', allItems.length, '개 품목');
         console.log('allItems:', allItems);
         
@@ -961,32 +878,17 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         console.log('품목 입력 필드 부모:', itemSearchInput.parentNode);
         
         if (activeItems.length > 0) {
-            const itemData = activeItems.map(i => ({ 
-                value: i.code, 
-                text: `${i.name} (${i.code})` 
-            }));
-            
-            console.log('품목 드롭다운 데이터:', itemData);
-            
             createSearchableDropdown(
                 itemSearchInput,
-                itemData,
+                activeItems.map(i => ({ value: i.code, text: `${i.name} (${i.code})` })),
                 (selectedItem) => {
                     console.log('품목 선택됨:', selectedItem);
                     const itemData = allItems.find(i => i.code === selectedItem.value);
                     if (itemData) {
                         itemSearchInput.value = selectedItem.text;
                         
-                        // 매입/매출에 따라 다른 단가 자동 설정
-                        const currentPage = state.currentPage;
-                        if (currentPage === 'purchases' && itemData.purchasePrice) {
-                            // 매입 등록 시 매입단가 사용
-                            priceInput.value = itemData.purchasePrice;
-                        } else if (currentPage === 'sales' && itemData.salesPrice) {
-                            // 매출 등록 시 매출단가 사용
-                            priceInput.value = itemData.salesPrice;
-                        } else if (itemData.standardPrice) {
-                            // 기존 호환성을 위해 standardPrice도 확인
+                        // 기준단가 자동 설정
+                        if (itemData.standardPrice) {
                             priceInput.value = itemData.standardPrice;
                         }
                         
@@ -1006,13 +908,7 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
         }
 
         itemSearchInput.addEventListener('input', updateTotalsFunction);
-        
-        // 수정 모드인 경우 초기 계산 실행
-        if (isEdit) {
-            calculateRowTotal(tr);
-            updateTotalsFunction();
-        }
-    }, isEdit ? 100 : 300);
+    }
 
     return tr;
 }
@@ -1026,33 +922,6 @@ export function addTransactionRow(tbody, allItems, rowData = {}, isEdit = false,
 export function setupTransactionModal(config, updateTotalsFunction, saveFunction) {
     const { isEdit, partnerLabel, data } = config;
     
-    // 전체 합계 계산 함수 (공통)
-    function calculateTransactionTotals() {
-        const rows = document.querySelectorAll('#transactionItemsBody tr');
-        let totalSupplyAmount = 0;
-        let totalVatAmount = 0;
-        let totalAmount = 0;
-        
-        rows.forEach(row => {
-            if (row.supplyAmount !== undefined) {
-                totalSupplyAmount += row.supplyAmount;
-                totalVatAmount += row.vatAmount;
-                totalAmount += row.totalAmount;
-            }
-        });
-        
-        // 합계 표시 업데이트
-        const supplyAmountElement = document.getElementById('supplyAmount');
-        const taxAmountElement = document.getElementById('taxAmount');
-        const totalAmountElement = document.getElementById('totalAmount');
-        
-        if (supplyAmountElement) supplyAmountElement.textContent = formatCurrency(totalSupplyAmount);
-        if (taxAmountElement) taxAmountElement.textContent = formatCurrency(totalVatAmount);
-        if (totalAmountElement) totalAmountElement.textContent = formatCurrency(totalAmount);
-        
-        console.log('전체 합계 계산 완료:', { totalSupplyAmount, totalVatAmount, totalAmount });
-    }
-    
     // 모달 버튼 설정
     const saveBtn = document.getElementById('modalSaveBtn');
     if (saveBtn) {
@@ -1061,75 +930,32 @@ export function setupTransactionModal(config, updateTotalsFunction, saveFunction
         saveBtn.onclick = saveFunction;
     }
 
-    // 거래처 검색 드롭다운 설정 (DOM 렌더링 완료 후 실행)
-    setTimeout(() => {
-        const partnerInput = document.querySelector('input[name="partnerSearch"]');
-        console.log('거래처 드롭다운 설정 시작:', {
-            partnerInput: !!partnerInput,
-            state: !!window.state,
-            partners: window.state ? window.state.partners : []
-        });
+    // 거래처 검색 드롭다운 설정
+    const partnerInput = document.querySelector('input[name="partnerSearch"]');
+    if (partnerInput) {
+        // 전역 state 객체에서 partners 가져오기
+        const partners = window.state ? window.state.partners : [];
+        console.log('거래처 목록:', partners);
         
-        if (partnerInput) {
-            // 전역 state 객체에서 partners 가져오기
-            const partners = window.state ? window.state.partners : [];
-            console.log('거래처 목록:', partners);
-            
-            if (partners && partners.length > 0) {
-                const partnerData = partners.map(p => ({ 
-                    value: p.businessNumber, 
-                    text: `${p.name} (${p.businessNumber})` 
-                }));
-                
-                console.log('거래처 드롭다운 데이터:', partnerData);
-                
-                createSearchableDropdown(
-                    partnerInput,
-                    partnerData,
-                    (item) => {
-                        console.log('거래처 선택됨:', item);
-                        window.selectedPartnerBusinessNumber = item.value;
-                        partnerInput.value = item.text;
-                    }
-                );
-            } else {
-                console.log('거래처 데이터가 없습니다.');
-                partnerInput.placeholder = '거래처를 먼저 등록해주세요';
-                
-                // 테스트용 샘플 데이터 (개발 중에만 사용)
-                const testPartners = [
-                    { name: '테스트거래처1', businessNumber: '123-45-67890' },
-                    { name: '테스트거래처2', businessNumber: '234-56-78901' }
-                ];
-                
-                const testPartnerData = testPartners.map(p => ({ 
-                    value: p.businessNumber, 
-                    text: `${p.name} (${p.businessNumber})` 
-                }));
-                
-                createSearchableDropdown(
-                    partnerInput,
-                    testPartnerData,
-                    (item) => {
-                        console.log('테스트 거래처 선택됨:', item);
-                        window.selectedPartnerBusinessNumber = item.value;
-                        partnerInput.value = item.text;
-                    }
-                );
-            }
-        } else {
-            console.log('거래처 입력 필드를 찾을 수 없습니다.');
+        if (partners.length > 0) {
+            createSearchableDropdown(
+                partnerInput,
+                partners.map(p => ({ value: p.businessNumber, text: `${p.name} (${p.businessNumber})` })),
+                (item) => {
+                    window.selectedPartnerBusinessNumber = item.value;
+                    partnerInput.value = item.text;
+                }
+            );
         }
-    }, 200);
+    }
 
     // 날짜 입력 필드 설정
     const dateInput = document.getElementById('transactionDate');
     
     if (isEdit && data.date) {
         dateInput.value = data.date;
-        const partnerInput = document.querySelector('input[name="partnerSearch"]');
         const partnerObj = state.partners.find(p => p.businessNumber === data.partner);
-        if (partnerObj && partnerInput) {
+        if (partnerObj) {
             partnerInput.value = `${partnerObj.name} (${partnerObj.businessNumber})`;
             window.selectedPartnerBusinessNumber = partnerObj.businessNumber;
         }
@@ -1144,162 +970,22 @@ export function setupTransactionModal(config, updateTotalsFunction, saveFunction
     const addRowBtn = document.getElementById('addRowBtn');
     const tbody = document.getElementById('transactionItemsBody');
     
-    if (addRowBtn) {
-        if (!isEdit) {
-            // 새로 등록 모드: 행 추가 버튼 활성화
-            addRowBtn.onclick = () => addTransactionRow(tbody, state.items, {}, isEdit, calculateTransactionTotals);
-            
-            // 행 삭제 이벤트
-            if (tbody) {
-                tbody.onclick = function(e) {
-                    if (e.target.closest('.remove-row-btn')) {
-                        e.target.closest('tr')?.remove();
-                        calculateTransactionTotals();
-                    }
-                };
+    if (!isEdit && addRowBtn && tbody) {
+        addRowBtn.onclick = () => addTransactionRow(tbody, state.items, {}, isEdit, updateTotalsFunction);
+        
+        // 행 삭제 이벤트
+        tbody.onclick = function(e) {
+            if (e.target.closest('.remove-row-btn')) {
+                e.target.closest('tr')?.remove();
+                updateTotalsFunction();
             }
-        } else {
-            // 수정 모드: 행 추가 버튼 숨기기
-            addRowBtn.style.display = 'none';
-        }
+        };
     }
 
-
-    
     // 초기 행 추가 (지연 실행으로 DOM 준비 보장)
     if (tbody) {
         setTimeout(() => {
-            if (isEdit && data) {
-                // 수정 모드: 기존 데이터로 행 추가
-                console.log('수정 모드 - 기존 데이터:', data);
-                addTransactionRow(tbody, state.items, {
-                    itemCode: data.item,
-                    quantity: data.quantity,
-                    price: data.price,
-                    taxType: data.taxType
-                }, isEdit, calculateTransactionTotals);
-            } else {
-                // 새로 등록 모드: 빈 행 추가
-                addTransactionRow(tbody, state.items, {}, isEdit, calculateTransactionTotals);
-            }
+            addTransactionRow(tbody, state.items, {}, isEdit, updateTotalsFunction);
         }, 200);
     }
-} 
-
-/**
- * 테이블 본문(tbody)에 로딩 스피너를 표시하는 함수
- * @param {string} tbodyId - 로딩을 표시할 tbody의 ID
- */
-export function showTableLoading(tbodyId) {
-    const tbody = document.getElementById(tbodyId);
-    if (!tbody) return;
-
-    // 기존 스피너가 있으면 제거
-    const existingSpinner = tbody.parentElement.querySelector('.table-spinner-overlay');
-    if (existingSpinner) existingSpinner.remove();
-
-    // 로딩 오버레이 생성
-    const spinnerOverlay = document.createElement('div');
-    spinnerOverlay.className = 'position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center table-spinner-overlay';
-    spinnerOverlay.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-    spinnerOverlay.style.zIndex = '10';
-    spinnerOverlay.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
-    
-    // tbody가 아닌 tbody의 부모(보통 table)를 기준으로 위치를 잡기 위해 table-responsive 같은 상위 div에 추가
-    tbody.style.opacity = '0.5';
-    tbody.parentElement.style.position = 'relative';
-    tbody.parentElement.appendChild(spinnerOverlay);
-}
-
-/**
- * 테이블 본문(tbody)의 로딩 스피너를 숨기는 함수
- * @param {string} tbodyId - 로딩을 숨길 tbody의 ID
- */
-export function hideTableLoading(tbodyId) {
-    const tbody = document.getElementById(tbodyId);
-    if (!tbody) return;
-
-    const spinner = tbody.parentElement.querySelector('.table-spinner-overlay');
-    if (spinner) {
-        spinner.remove();
-    }
-    tbody.style.opacity = '1';
-}
-
-/**
- * Firestore에 오류 로그를 기록하는 함수
- * @param {Error} error - 발생한 오류 객체
- * @param {object} context - 오류 발생 컨텍스트 정보
- */
-export async function logErrorToFirestore(error, context = {}) {
-    try {
-        const businessNumber = getCurrentCompanyBusinessNumber();
-        if (!businessNumber) {
-            console.warn('오류 로그 기록 실패: 사업자번호를 찾을 수 없습니다.');
-            return;
-        }
-
-        const errorData = {
-            timestamp: new Date().toISOString(),
-            error: {
-                name: error.name,
-                message: error.message,
-                stack: error.stack
-            },
-            context: {
-                ...context,
-                userAgent: navigator.userAgent,
-                url: window.location.href,
-                currentPage: state.currentPage
-            }
-        };
-
-        // Firestore에 오류 로그 저장
-        if (window.firebase && window.firebase.firestore) {
-            const db = window.firebase.firestore();
-            await db
-                .collection('companies')
-                .doc(businessNumber)
-                .collection('errorLogs')
-                .add(errorData);
-
-            console.log('오류 로그 기록 완료:', { error: error.message, timestamp: errorData.timestamp });
-        }
-    } catch (logError) {
-        console.error('오류 로그 기록 실패:', logError);
-        // 오류 로그 기록 실패는 애플리케이션 동작에 영향을 주지 않도록 함
-    }
-} 
-
-// Top progress bar
-export function showTopBarLoading() {
-    let bar = document.getElementById('topProgressBar');
-    if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'topProgressBar';
-        document.body.appendChild(bar);
-    }
-    bar.classList.remove('hidden');
-    bar.style.width = '10%';
-    // 진행 시뮬레이션
-    let progress = 10;
-    if (bar._timer) clearInterval(bar._timer);
-    bar._timer = setInterval(() => {
-        progress = Math.min(progress + Math.random() * 20, 95);
-        bar.style.width = progress + '%';
-    }, 200);
-    return {
-        complete: () => hideTopBarLoading(bar)
-    };
-}
-
-export function hideTopBarLoading(barRef) {
-    const bar = barRef || document.getElementById('topProgressBar');
-    if (!bar) return;
-    if (bar._timer) { clearInterval(bar._timer); bar._timer = null; }
-    bar.style.width = '100%';
-    setTimeout(() => {
-        bar.classList.add('hidden');
-        bar.style.width = '0';
-    }, 250);
 } 

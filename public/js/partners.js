@@ -1,19 +1,17 @@
 // 거래처 관리 모듈
-import { state, getCurrentCompanyBusinessNumber, isLoggedIn, navigateTo } from './main.js';
+import { state, getCurrentCompanyBusinessNumber, saveCompanyState, isLoggedIn, navigateTo } from './main.js';
 import { showLoading, hideLoading, showToast, showModal, createSearchableDropdown, formatCurrency, generateId, renderPagination, waitForMainContent, closeModal } from './ui.js';
-import { saveOrUpdatePartner, deletePartner as deletePartnerFromFirestore } from './firestore-helper.js';
-
-// 중복 호출 방지 플래그
-let isSavingPartner = false;
 
 export function loadPartners() {
     if (!isLoggedIn()) {
         navigateTo('login');
-        return Promise.reject(new Error('로그인되지 않음'));
+        return;
     }
     
+    showLoading('거래처 목록을 불러오는 중...');
+    
     // DOM이 준비될 때까지 안전하게 대기
-    return waitForMainContent()
+    waitForMainContent()
         .then(mainContent => {
             const content = `
                 <div class="card">
@@ -54,18 +52,12 @@ export function loadPartners() {
             
             mainContent.innerHTML = content;
             loadPartnersTable();
-            
-            // 최소 0.5초 로딩 표시
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    resolve();
-                }, 500);
-            });
+            hideLoading();
         })
         .catch(error => {
             console.error('거래처 관리 페이지 로드 실패:', error);
+            hideLoading();
             showToast('페이지 로드 중 오류가 발생했습니다.', 'error');
-            throw error;
         });
 }
 
@@ -111,93 +103,87 @@ export function loadPartnersTable() {
     createPartnersPagination(totalPages, page);
 }
 
-export async function savePartner() {
-    // 중복 호출 방지
-    if (isSavingPartner) {
-        console.log('savePartner 중복 호출 방지');
-        return;
-    }
-    
+export function savePartner() {
     // 현재 페이지가 partners가 아닌 경우 실행하지 않음
     if (state.currentPage !== 'partners') {
         console.log('savePartner 호출됨 but currentPage is:', state.currentPage);
         return;
     }
     
-    isSavingPartner = true;
+    const form = document.getElementById('partnerForm');
+    const formData = new FormData(form);
+    const partnerData = Object.fromEntries(formData.entries());
+
+    // Validate required fields
+    if (!partnerData.businessNumber || !partnerData.name || !partnerData.representative) {
+        alert('필수 항목을 모두 입력해주세요.');
+        return;
+    }
+
+    // Validate business number format
+    const businessNumberPattern = /^[0-9]{3}-[0-9]{2}-[0-9]{5}$/;
+    if (!businessNumberPattern.test(partnerData.businessNumber)) {
+        alert('사업자등록번호 형식이 올바르지 않습니다. (예: 000-00-00000)');
+        return;
+    }
+
+    // 중복 체크 (사업자등록번호 기준)
+    const cleanBusinessNumber = partnerData.businessNumber.replace(/-/g, '');
+    const existingPartner = state.partners.find(
+        partner => partner.businessNumber.replace(/-/g, '') === cleanBusinessNumber
+    );
+
+    if (existingPartner) {
+        alert('이미 등록된 사업자등록번호입니다.');
+        return;
+    }
+
+    // Add new partner
+    const newPartner = {
+        ...partnerData,
+        createdAt: new Date().toISOString()
+    };
     
-    try {
-        const form = document.getElementById('partnerForm');
-        const formData = new FormData(form);
-        const partnerData = Object.fromEntries(formData.entries());
-
-        // Validate required fields
-        if (!partnerData.businessNumber || !partnerData.name || !partnerData.representative) {
-            alert('필수 항목을 모두 입력해주세요.');
-            return;
+    // Firestore 저장 (올바른 경로: companies/{companyId}/partners/{businessNumber})
+            const businessNumber = getCurrentCompanyBusinessNumber();
+            if (businessNumber) {
+        try {
+            // Firebase가 전역으로 로드되어 있는지 확인
+            if (window.firebase && window.firebase.firestore) {
+                const db = window.firebase.firestore();
+                db.collection('companies')
+                    .doc(businessNumber)
+                    .collection('partners')
+                    .doc(partnerData.businessNumber)
+                    .set(newPartner)
+                    .then(() => {
+                        console.log('Firestore 거래처 저장 성공:', partnerData.businessNumber);
+                        // 성공 시에만 UI 업데이트
+                        state.partners.push(newPartner);
+    saveCompanyState();
+    
+    // 모달 닫기
+    closeModal();
+    
+    // 마지막 페이지로 이동하여 새 거래처 확인
+    state.partnersCurrentPage = Math.ceil(state.partners.length / 10);
+    loadPartnersTable();
+    showToast('등록되었습니다.');
+                    })
+                    .catch(e => {
+                        console.error('Firestore 거래처 저장 오류:', e);
+                        showToast('Firestore 저장 중 오류가 발생했습니다.', 'error');
+                    });
+            } else {
+                console.warn('Firebase가 로드되지 않았습니다.');
+                showToast('Firebase 연결을 확인해주세요.', 'warning');
+            }
+        } catch (e) {
+            console.error('Firebase 설정 오류:', e);
+            showToast('Firebase 설정 오류가 발생했습니다.', 'error');
         }
-
-        // Validate business number format
-        const businessNumberPattern = /^[0-9]{3}-[0-9]{2}-[0-9]{5}$/;
-        if (!businessNumberPattern.test(partnerData.businessNumber)) {
-            alert('사업자등록번호 형식이 올바르지 않습니다. (예: 000-00-00000)');
-            return;
-        }
-
-        // 중복 체크 (사업자등록번호 기준)
-        const cleanBusinessNumber = partnerData.businessNumber.replace(/-/g, '');
-        const existingPartner = state.partners.find(
-            partner => partner.businessNumber.replace(/-/g, '') === cleanBusinessNumber
-        );
-
-        if (existingPartner) {
-            alert('이미 등록된 사업자등록번호입니다.');
-            return;
-        }
-
-        // 로딩 표시
-        const saveBtn = document.getElementById('modalSaveBtn');
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> 저장 중...';
-        }
-
-        const businessNumber = getCurrentCompanyBusinessNumber();
-        if (!businessNumber) {
-            throw new Error('사업자번호를 찾을 수 없습니다.');
-        }
-
-        // Add new partner
-        const newPartner = {
-            ...partnerData,
-            createdAt: new Date().toISOString()
-        };
-        
-        // Firestore 저장
-        await saveOrUpdatePartner(businessNumber, newPartner);
-        
-        // 성공 시에만 로컬 상태 업데이트
-        state.partners.push(newPartner);
-        
-        // 모달 닫기
-        closeModal();
-        
-        // 마지막 페이지로 이동하여 새 거래처 확인
-        state.partnersCurrentPage = Math.ceil(state.partners.length / 10);
-        loadPartnersTable();
-        showToast('등록되었습니다.');
-        
-    } catch (error) {
-        console.error('거래처 저장 실패:', error);
-        showToast(`저장에 실패했습니다: ${error.message}`, 'error');
-    } finally {
-        // 버튼 상태 복구
-        const saveBtn = document.getElementById('modalSaveBtn');
-        if (saveBtn) {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '등록';
-        }
-        isSavingPartner = false;
+    } else {
+        showToast('사업자번호를 찾을 수 없습니다.', 'error');
     }
 }
 
@@ -253,34 +239,49 @@ export function editPartner(businessNumber) {
         // 수정 모드에서는 updatePartner 함수를 호출하도록 설정
         saveBtn.onclick = updatePartner;
     }
-    
-
 }
 
-export async function deletePartner(businessNumber) {
+export function deletePartner(businessNumber) {
     if (confirm('정말로 이 거래처를 삭제하시겠습니까?')) {
-        try {
-            const companyBusinessNumber = getCurrentCompanyBusinessNumber();
-            if (!companyBusinessNumber) {
-                throw new Error('사업자번호를 찾을 수 없습니다.');
+        // Firestore 삭제 (올바른 경로: companies/{companyId}/partners/{businessNumber})
+                const companyBusinessNumber = getCurrentCompanyBusinessNumber();
+                if (companyBusinessNumber) {
+            try {
+                // Firebase가 전역으로 로드되어 있는지 확인
+                if (window.firebase && window.firebase.firestore) {
+                    const db = window.firebase.firestore();
+                    db.collection('companies')
+                        .doc(companyBusinessNumber)
+                        .collection('partners')
+                        .doc(businessNumber)
+                        .delete()
+                                    .then(() => {
+                                        console.log('Firestore 거래처 삭제 성공:', businessNumber);
+                            // 성공 시에만 UI 업데이트
+                            state.partners = state.partners.filter(p => p.businessNumber !== businessNumber);
+                            saveCompanyState();
+                            loadPartnersTable();
+                            showToast('삭제되었습니다. 파이어베이스 DB에서도 삭제가 되어야하고 웹앱에서 삭제되었습니다.');
+                                    })
+                                    .catch(e => {
+                                        console.error('Firestore 거래처 삭제 오류:', e);
+                            showToast('Firestore 삭제 중 오류가 발생했습니다.', 'error');
+                            });
+                } else {
+                    console.warn('Firebase가 로드되지 않았습니다.');
+                    showToast('Firebase 연결을 확인해주세요.', 'warning');
             }
-            
-            // Firestore 삭제
-            await deletePartnerFromFirestore(companyBusinessNumber, businessNumber);
-            
-            // 성공 시에만 로컬 상태 업데이트
-            state.partners = state.partners.filter(p => p.businessNumber !== businessNumber);
-            loadPartnersTable();
-            showToast('삭제되었습니다.');
-            
-        } catch (error) {
-            console.error('거래처 삭제 실패:', error);
-            showToast(`삭제에 실패했습니다: ${error.message}`, 'error');
+        } catch (e) { 
+                console.error('Firebase 설정 오류:', e);
+                showToast('Firebase 설정 오류가 발생했습니다.', 'error');
+            }
+        } else {
+            showToast('사업자번호를 찾을 수 없습니다.', 'error');
         }
     }
 }
 
-export async function updatePartner() {
+export function updatePartner() {
     // 현재 페이지가 partners가 아닌 경우 실행하지 않음
     if (state.currentPage !== 'partners') {
         console.log('updatePartner 호출됨 but currentPage is:', state.currentPage);
@@ -314,72 +315,87 @@ export async function updatePartner() {
         updatedAt: new Date().toISOString()
     };
     
-    try {
-        const businessNumber = getCurrentCompanyBusinessNumber();
-        if (!businessNumber) {
-            throw new Error('사업자번호를 찾을 수 없습니다.');
+    // Firestore 수정 (올바른 경로: companies/{companyId}/partners/{businessNumber})
+            const businessNumber = getCurrentCompanyBusinessNumber();
+            if (businessNumber) {
+        try {
+            // Firebase가 전역으로 로드되어 있는지 확인
+            if (window.firebase && window.firebase.firestore) {
+                const db = window.firebase.firestore();
+                db.collection('companies')
+                    .doc(businessNumber)
+                    .collection('partners')
+                    .doc(partnerData.businessNumber)
+                    .update(updatedPartner)
+                                .then(() => {
+                                    console.log('Firestore 거래처 수정 성공:', partnerData.businessNumber);
+                        // 성공 시에만 UI 업데이트
+                        state.partners[existingPartnerIndex] = updatedPartner;
+    saveCompanyState();
+    
+    // 모달 닫기
+    closeModal();
+    
+    // 테이블 새로고침 및 성공 메시지 표시
+    loadPartnersTable();
+    showToast('수정되었습니다.');
+                    })
+                    .catch(e => {
+                        console.error('Firestore 거래처 수정 오류:', e);
+                        showToast('Firestore 수정 중 오류가 발생했습니다.', 'error');
+                    });
+            } else {
+                console.warn('Firebase가 로드되지 않았습니다.');
+                showToast('Firebase 연결을 확인해주세요.', 'warning');
+            }
+        } catch (e) {
+            console.error('Firebase 설정 오류:', e);
+            showToast('Firebase 설정 오류가 발생했습니다.', 'error');
         }
-        
-        // Firestore 수정
-        await saveOrUpdatePartner(businessNumber, updatedPartner);
-        
-        // 성공 시에만 로컬 상태 업데이트
-        state.partners[existingPartnerIndex] = updatedPartner;
-        
-        // 모달 닫기
-        closeModal();
-        
-        // 테이블 새로고침 및 성공 메시지 표시
-        loadPartnersTable();
-        showToast('수정되었습니다.');
-        
-    } catch (error) {
-        console.error('거래처 수정 실패:', error);
-        showToast(`수정에 실패했습니다: ${error.message}`, 'error');
+    } else {
+        showToast('사업자번호를 찾을 수 없습니다.', 'error');
     }
 }
 
 export function showPartnerModal() {
     state.currentPage = 'partners'; // 현재 페이지 상태를 partners로 설정하여 저장 버튼이 savePartner를 호출하도록 함
     const content = `
-        <form id="partnerForm" autocomplete="off">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">사업자등록번호 <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="businessNumber" id="partnerBusinessNumberInput" required 
-                        placeholder="000-00-00000" maxlength="12" inputmode="numeric" pattern="^[0-9]{3}-[0-9]{2}-[0-9]{5}$">
-                    <div class="form-text">형식: 000-00-00000</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">상호명 <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="name" required placeholder="회사/상호명">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">대표자명 <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="representative" required placeholder="대표자명">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">업태</label>
-                    <input type="text" class="form-control" name="businessType" placeholder="업태">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">종목</label>
-                    <input type="text" class="form-control" name="businessCategory" placeholder="종목">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">연락처</label>
-                    <input type="tel" class="form-control" name="phone" 
-                        placeholder="000-0000-0000" pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}" inputmode="tel">
-                    <div class="form-text">형식: 000-0000-0000</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">이메일</label>
-                    <input type="email" class="form-control" name="email" placeholder="name@example.com">
-                </div>
-                <div class="col-12">
-                    <label class="form-label">주소</label>
-                    <input type="text" class="form-control" name="address" placeholder="도로명 주소">
-                </div>
+        <form id="partnerForm">
+            <div class="mb-3">
+                <label class="form-label">사업자등록번호 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="businessNumber" id="partnerBusinessNumberInput" required 
+                    placeholder="000-00-00000" maxlength="12">
+                <div class="form-text">형식: 000-00-00000</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">상호명 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">대표자명 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="representative" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">업태</label>
+                <input type="text" class="form-control" name="businessType">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">종목</label>
+                <input type="text" class="form-control" name="businessCategory">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">연락처</label>
+                <input type="tel" class="form-control" name="phone" 
+                    placeholder="000-0000-0000" pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}">
+                <div class="form-text">형식: 000-0000-0000</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">이메일</label>
+                <input type="email" class="form-control" name="email">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">주소</label>
+                <input type="text" class="form-control" name="address">
             </div>
         </form>
     `;
@@ -407,9 +423,9 @@ export function showPartnerModal() {
     if (saveBtn) {
         saveBtn.style.display = 'block';
         saveBtn.textContent = '등록';
+        // 이벤트 핸들러 추가
+        saveBtn.onclick = savePartner;
     }
-    
-
 }
 
 export function handleExcelUpload(event) {
@@ -966,6 +982,7 @@ export function confirmBulkUpload() {
 
                         // 모든 저장 작업 완료 후 처리
                         Promise.all(savePromises).then(() => {
+            saveCompanyState();
             
             // 모달 닫기
             closeModal();

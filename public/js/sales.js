@@ -1,202 +1,29 @@
 // 매출 관리 모듈
-import { state, getCurrentCompanyBusinessNumber, isLoggedIn, navigateTo } from './main.js';
-import { showLoading, hideLoading, showToast, showModal, createSearchableDropdown, formatCurrency, generateId, updateTotals, waitForMainContent, closeModal, createTransactionModalHTML, addTransactionRow, setupTransactionModal, showTableLoading, hideTableLoading, logErrorToFirestore } from './ui.js';
+import { state, getCurrentCompanyBusinessNumber, saveCompanyData, isLoggedIn, navigateTo } from './main.js';
+import { showLoading, hideLoading, showToast, showModal, createSearchableDropdown, formatCurrency, generateId, updateTotals, waitForMainContent, closeModal, createTransactionModalHTML, addTransactionRow, setupTransactionModal } from './ui.js';
 import { logAccess } from './firestore-helper.js';
 
 // 페이지네이션 상태
 let currentSalesPage = 1;
 const itemsPerSalesPage = 15;
 
-/**
- * 특정 거래처와 품목에 대한 가장 최근 매출 단가를 찾습니다.
- * @param {string} partnerId - 거래처 사업자등록번호
- * @param {string} itemId - 품목 코드
- * @returns {number|null} - 가장 최근 단가 또는 null
- */
-function findLastSalesPrice(partnerId, itemId) {
-    console.log('findLastSalesPrice 호출:', { partnerId, itemId });
-    console.log('전체 매출 데이터:', state.sales);
-    
-    if (!partnerId || !itemId) {
-        console.log('거래처 또는 품목 ID가 없음');
-        return null;
-    }
-
-    const relevantSales = state.sales
-        .filter(s => {
-            console.log('매출 데이터 확인:', { 
-                salePartner: s.partner, 
-                saleItem: s.item, 
-                targetPartner: partnerId, 
-                targetItem: itemId,
-                matches: s.partner === partnerId && s.item === itemId
-            });
-            return s.partner === partnerId && s.item === itemId;
-        })
-        .sort((a, b) => new Date(b.date) - new Date(a.date)); // 최신순으로 정렬
-
-    console.log('필터링된 매출 데이터:', relevantSales);
-
-    if (relevantSales.length > 0) {
-        const lastSale = relevantSales[0];
-        const price = lastSale.price || null;
-        console.log('최근 단가 찾음:', price);
-        return price;
-    }
-    
-    console.log('해당 거래처와 품목의 매출 데이터 없음');
-    return null;
-}
-
-/**
- * 특정 거래처와 품목에 대한 최근 5개의 매출 기록을 가져옵니다.
- * @param {string} partnerId - 거래처 사업자등록번호
- * @param {string} itemId - 품목 코드
- * @returns {Array<object>} - 최근 거래 기록 배열
- */
-function getRecentSales(partnerId, itemId) {
-    console.log('getRecentSales 호출:', { partnerId, itemId });
-    
-    if (!partnerId || !itemId) {
-        console.log('거래처 또는 품목 ID가 없음');
-        return [];
-    }
-
-    const relevantSales = state.sales
-        .filter(s => {
-            const matches = s.partner === partnerId && s.item === itemId;
-            console.log('매출 데이터 확인:', { 
-                salePartner: s.partner, 
-                saleItem: s.item, 
-                targetPartner: partnerId, 
-                targetItem: itemId,
-                matches
-            });
-            return matches;
-        })
-        .sort((a, b) => new Date(b.date) - new Date(a.date)) // 최신순으로 정렬
-        .slice(0, 5); // 최근 5개만 선택
-
-    console.log('필터링된 최근 매출 데이터:', relevantSales);
-
-    const result = relevantSales.map(s => ({
-        date: s.date,
-        quantity: s.quantity,
-        price: s.price
-    }));
-    
-    console.log('최근 거래 내역 결과:', result);
-    return result;
-}
-
-/**
- * 히스토리 팝오버를 표시합니다.
- * @param {HTMLElement} targetElement - 팝오버를 표시할 대상 요소
- * @param {Array} recentData - 최근 거래 데이터
- */
-function showHistoryPopover(targetElement, recentData) {
-    // 기존 팝오버 제거
-    const existingPopover = document.querySelector('.history-popover');
-    if (existingPopover) {
-        existingPopover.remove();
-    }
-
-    // 팝오버 생성
-    const popover = document.createElement('div');
-    popover.className = 'history-popover';
-    popover.style.cssText = `
-        position: absolute;
-        top: 100%;
-        left: 0;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 9999;
-        min-width: 250px;
-        padding: 12px;
-        font-size: 12px;
-        margin-top: 4px;
-    `;
-
-    const content = `
-        <div style="font-weight: bold; margin-bottom: 8px; color: #333; font-size: 13px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
-            📋 최근 거래 내역
-        </div>
-        ${recentData.length > 0 ? recentData.map((item, index) => `
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; padding: 4px 0; ${index % 2 === 0 ? 'background-color: #f8f9fa;' : ''} border-radius: 3px;">
-                <span style="color: #666;">${item.date}</span>
-                <span style="font-weight: 500; color: #333;">${item.quantity}개 × ₩${item.price.toLocaleString()}</span>
-            </div>
-        `).join('') : `
-            <div style="text-align: center; color: #999; padding: 8px;">
-                최근 거래내역이 없습니다.
-            </div>
-        `}
-        <div style="margin-top: 8px; padding-top: 4px; border-top: 1px solid #eee; font-size: 11px; color: #999;">
-            클릭하여 닫기
-        </div>
-    `;
-    
-    popover.innerHTML = content;
-    
-    // 팝오버를 모달 내부에 추가 (모달이 아닌 body에 직접 추가)
-    document.body.appendChild(popover);
-    
-    // 팝오버 위치 조정
-    const targetRect = targetElement.getBoundingClientRect();
-    const modalRect = document.querySelector('.modal-content')?.getBoundingClientRect();
-    
-    if (modalRect) {
-        // 모달 내부에서의 상대 위치 계산
-        const relativeTop = targetRect.top - modalRect.top + targetRect.height;
-        const relativeLeft = targetRect.left - modalRect.left;
-        
-        popover.style.position = 'absolute';
-        popover.style.top = `${targetRect.top + targetRect.height + 4}px`;
-        popover.style.left = `${targetRect.left}px`;
-        popover.style.zIndex = '9999';
-    }
-
-    // 팝오버 클릭 시 닫기
-    popover.addEventListener('click', (e) => {
-        e.stopPropagation();
-        hideHistoryPopover();
-    });
-
-    // 팝오버 외부 클릭 시 닫기
-    document.addEventListener('click', (e) => {
-        if (!popover.contains(e.target) && !targetElement.contains(e.target)) {
-            hideHistoryPopover();
-        }
-    });
-}
-
-/**
- * 히스토리 팝오버를 숨깁니다.
- */
-function hideHistoryPopover() {
-    const existingPopover = document.querySelector('.history-popover');
-    if (existingPopover) {
-        existingPopover.remove();
-    }
-}
-
-export async function loadSales() {
+export function loadSales() {
     if (!isLoggedIn()) {
         navigateTo('login');
-        return Promise.reject(new Error('로그인되지 않음'));
+        return;
     }
     
     // 데이터 조회 로그 기록
     try {
-        await logAccess('VIEW_DATA', { page: 'sales', action: 'loadSales' });
+        logAccess('VIEW_DATA', { page: 'sales', action: 'loadSales' });
     } catch (error) {
         console.error('매출 조회 로그 기록 실패:', error);
     }
     
+    showLoading('매출 목록을 불러오는 중...');
+    
     // DOM이 준비될 때까지 안전하게 대기
-    return waitForMainContent()
+    waitForMainContent()
         .then(mainContent => {
             const content = `
                 <div class="card">
@@ -248,6 +75,7 @@ export async function loadSales() {
             
             mainContent.innerHTML = content;
             loadSalesTable();
+            hideLoading();
 
             // 엑셀 다운로드 버튼 이벤트
             document.getElementById('downloadSalesExcelBtn').addEventListener('click', downloadSelectedSalesExcel);
@@ -255,93 +83,71 @@ export async function loadSales() {
             document.getElementById('salesCheckAll').addEventListener('change', function() {
                 document.querySelectorAll('.sales-check').forEach(cb => { cb.checked = this.checked; });
             });
-            
-            // 최소 0.5초 로딩 표시
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    resolve();
-                }, 500);
-            });
         })
         .catch(error => {
             console.error('매출 관리 페이지 로드 실패:', error);
+            hideLoading();
             showToast('페이지 로드 중 오류가 발생했습니다.', 'error');
-            throw error;
         });
 }
 
 export function loadSalesTable(page = 1) {
-    // [적용] 테이블 로딩 표시 시작
-    showTableLoading('salesTableBody');
+    currentSalesPage = page;
+    const tbody = document.getElementById('salesTableBody');
+    tbody.innerHTML = '';
 
-    // 비동기 처리처럼 보이게 하여 로딩 효과를 확실히 보여줍니다.
-    setTimeout(() => {
-        try {
-            currentSalesPage = page;
-            const tbody = document.getElementById('salesTableBody');
-            tbody.innerHTML = '';
+    // 전체 매출 데이터
+    const allSales = state.sales;
+    const totalCount = allSales.length;
+    
+    // 페이지네이션 계산
+    const totalPages = Math.ceil(totalCount / itemsPerSalesPage);
+    const startIndex = (page - 1) * itemsPerSalesPage;
+    const endIndex = Math.min(startIndex + itemsPerSalesPage, totalCount);
+    
+    // 현재 페이지의 매출만 표시
+    const currentPageSales = allSales.slice(startIndex, endIndex);
 
-            // 전체 매출 데이터
-            const allSales = state.sales;
-            const totalCount = allSales.length;
-            
-            // 페이지네이션 계산
-            const totalPages = Math.ceil(totalCount / itemsPerSalesPage);
-            const startIndex = (page - 1) * itemsPerSalesPage;
-            const endIndex = Math.min(startIndex + itemsPerSalesPage, totalCount);
-            
-            // 현재 페이지의 매출만 표시
-            const currentPageSales = allSales.slice(startIndex, endIndex);
-
-            currentPageSales.forEach(sale => {
-                const partner = state.partners.find(p => p.businessNumber === sale.partner);
-                const item = state.items.find(i => i.code === sale.item);
-                let taxType = sale.taxType;
-                if (!taxType) taxType = 'taxable';
-                const taxTypeText = taxType === 'taxable' ? '과세' : (taxType === 'taxFree' ? '면세' : '');
-                
-                // 공급가액과 세액 계산
-                const supplyAmount = sale.supplyAmount || (sale.totalAmount ? sale.totalAmount / 1.1 : 0);
-                const taxAmount = sale.taxAmount || (sale.totalAmount ? sale.totalAmount - supplyAmount : 0);
-                
-                const row = `
-                    <tr>
-                        <td><input type="checkbox" class="sales-check" value="${sale.id}"></td>
-                        <td title="${sale.date}">${sale.date}</td>
-                        <td title="${partner ? partner.name : 'Unknown'}">${partner ? partner.name : 'Unknown'}</td>
-                        <td title="${taxTypeText}">${taxTypeText}</td>
-                        <td title="${item ? item.name : 'Unknown'}">${item ? item.name : 'Unknown'}</td>
-                        <td title="${sale.quantity}">${sale.quantity}</td>
-                        <td title="${formatCurrency(sale.price)}">${formatCurrency(sale.price)}</td>
-                        <td title="${formatCurrency(supplyAmount)}">${formatCurrency(supplyAmount)}</td>
-                        <td title="${formatCurrency(taxAmount)}">${formatCurrency(taxAmount)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editSale('${sale.id}')">
-                                <i class='bx bx-edit'></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSale('${sale.id}')">
-                                <i class='bx bx-trash'></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
-            
-            // 페이지네이션 정보 업데이트
-            updateSalesPaginationInfo(totalCount, startIndex + 1, endIndex);
-            
-            // 페이지네이션 버튼 생성
-            createSalesPagination(totalPages, page);
-
-        } catch (error) {
-            console.error("테이블 렌더링 중 오류:", error);
-            showToast('테이블을 표시하는 중 오류가 발생했습니다.', 'error');
-        } finally {
-            // [적용] 테이블 로딩 표시 숨김
-            hideTableLoading('salesTableBody');
-        }
-    }, 50); // 0.05초의 짧은 딜레이로 사용자에게 로딩을 인지시킴
+    currentPageSales.forEach(sale => {
+        const partner = state.partners.find(p => p.businessNumber === sale.partner);
+        const item = state.items.find(i => i.code === sale.item);
+        let taxType = sale.taxType;
+        if (!taxType) taxType = 'taxable';
+        const taxTypeText = taxType === 'taxable' ? '과세' : (taxType === 'taxFree' ? '면세' : '');
+        
+        // 공급가액과 세액 계산
+        const supplyAmount = sale.supplyAmount || (sale.totalAmount ? sale.totalAmount / 1.1 : 0);
+        const taxAmount = sale.taxAmount || (sale.totalAmount ? sale.totalAmount - supplyAmount : 0);
+        
+        const row = `
+            <tr>
+                <td><input type="checkbox" class="sales-check" value="${sale.id}"></td>
+                <td title="${sale.date}">${sale.date}</td>
+                <td title="${partner ? partner.name : 'Unknown'}">${partner ? partner.name : 'Unknown'}</td>
+                <td title="${taxTypeText}">${taxTypeText}</td>
+                <td title="${item ? item.name : 'Unknown'}">${item ? item.name : 'Unknown'}</td>
+                <td title="${sale.quantity}">${sale.quantity}</td>
+                <td title="${formatCurrency(sale.price)}">${formatCurrency(sale.price)}</td>
+                <td title="${formatCurrency(supplyAmount)}">${formatCurrency(supplyAmount)}</td>
+                <td title="${formatCurrency(taxAmount)}">${formatCurrency(taxAmount)}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editSale('${sale.id}')">
+                        <i class='bx bx-edit'></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSale('${sale.id}')">
+                        <i class='bx bx-trash'></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+    
+    // 페이지네이션 정보 업데이트
+    updateSalesPaginationInfo(totalCount, startIndex + 1, endIndex);
+    
+    // 페이지네이션 버튼 생성
+    createSalesPagination(totalPages, page);
 }
 
 function updateSalesPaginationInfo(totalCount, start, end) {
@@ -476,33 +282,6 @@ export function showSalesModal(saleToEdit = null) {
     // 3. 공통 모달 설정
     setupTransactionModal(config, updateSalesTotals, saveSales);
     
-    // 4. 히스토리 기능 추가
-    setTimeout(() => {
-        setupSalesHistory();
-    }, 500);
-    
-    // 5. 수정 모드인 경우 기존 데이터 로드
-    if (isEdit && saleToEdit) {
-        setTimeout(() => {
-            const tbody = document.getElementById('transactionItemsBody');
-            if (tbody && saleToEdit.item) {
-                // 기존 행 제거
-                tbody.innerHTML = '';
-                
-                // 기존 데이터로 행 추가
-                addTransactionRow(tbody, state.items, {
-                    itemCode: saleToEdit.item,
-                    quantity: saleToEdit.quantity,
-                    price: saleToEdit.price,
-                    taxType: saleToEdit.taxType || 'taxable'
-                }, isEdit, updateSalesTotals);
-                
-                // 합계 재계산
-                updateSalesTotals();
-            }
-        }, 300);
-    }
-    
     window.editingSaleId = isEdit ? saleToEdit.id : null; // 호환성을 위해 유지
 }
 
@@ -520,12 +299,12 @@ function updateSalesTotals() {
     let totalTaxAmount = 0;
     
     // 모든 품목 행을 순회하며 계산
-    const itemRows = document.querySelectorAll('#transactionItemsBody tr');
+    const itemRows = document.querySelectorAll('#salesItemsBody tr');
     itemRows.forEach(row => {
-        const quantityInput = row.querySelector('.quantity-input');
-        const priceInput = row.querySelector('.price-input');
-        const taxTypeSelect = row.querySelector('.tax-type-select');
-        const rowSumEl = row.querySelector('.row-sum');
+        const quantityInput = row.querySelector('.quantityInput');
+        const priceInput = row.querySelector('.priceInput');
+        const taxTypeSelect = row.querySelector('.taxTypeSelect');
+        const rowSumEl = row.querySelector('.rowSum');
         
         if (quantityInput && priceInput && taxTypeSelect) {
             const quantity = parseFloat(quantityInput.value) || 0;
@@ -607,6 +386,7 @@ export function deleteSale(id) {
                         
                         // UI 업데이트 (Firestore 성공 여부와 관계없이)
                         state.sales = state.sales.filter(s => s.id !== id);
+                        saveCompanyData(businessNumber);
                         
                         // 페이지네이션 고려하여 테이블 다시 로드
                         const totalPages = Math.ceil(state.sales.length / itemsPerSalesPage);
@@ -622,6 +402,7 @@ export function deleteSale(id) {
                         
                         // 오류가 발생해도 UI에서는 삭제 진행
                         state.sales = state.sales.filter(s => s.id !== id);
+                        saveCompanyData(businessNumber);
                         
                         // 페이지네이션 고려하여 테이블 다시 로드
                         const totalPages = Math.ceil(state.sales.length / itemsPerSalesPage);
@@ -656,7 +437,7 @@ export function editSale(id) {
 }
 
 // ✅ saveSales 함수를 통합된 버전으로 교체
-export function saveSales() {
+export async function saveSales() {
     if (window.isSavingSales) return;
     window.isSavingSales = true;
 
@@ -674,33 +455,8 @@ export function saveSales() {
     const date = dateInput ? dateInput.value : '';
     const partner = window.selectedPartnerBusinessNumber;
 
-    // 강화된 입력 검증
-    if (!date || !partner) {
-        alert('거래일자와 출고처를 모두 입력해주세요.');
-        if(saveButton) { 
-            saveButton.disabled = false; 
-            saveButton.innerHTML = editingId ? '<i class="bx bx-edit"></i> 수정' : '<i class="bx bx-save"></i> 등록'; 
-        }
-        window.isSavingSales = false;
-        return;
-    }
-
-    // 날짜 형식 검증
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        alert('거래일자는 YYYY-MM-DD 형식으로 입력해주세요.');
-        if(saveButton) { 
-            saveButton.disabled = false; 
-            saveButton.innerHTML = editingId ? '<i class="bx bx-edit"></i> 수정' : '<i class="bx bx-save"></i> 등록'; 
-        }
-        window.isSavingSales = false;
-        return;
-    }
-
-    // 날짜 유효성 검증
-    const selectedDate = new Date(date);
-    const today = new Date();
-    if (selectedDate > today) {
-        alert('거래일자는 오늘 날짜보다 미래일 수 없습니다.');
+    if (!date || !partner || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        alert('거래일자와 출고처를 올바르게 입력해주세요.');
         if(saveButton) { 
             saveButton.disabled = false; 
             saveButton.innerHTML = editingId ? '<i class="bx bx-edit"></i> 수정' : '<i class="bx bx-save"></i> 등록'; 
@@ -723,14 +479,13 @@ export function saveSales() {
             return;
         }
 
-        const tr = document.querySelector('#transactionItemsBody tr');
-        const quantity = Number(tr.querySelector('.quantity-input').value);
-        const price = Number(tr.querySelector('.price-input').value);
-        const taxType = tr.querySelector('.tax-type-select').value;
+        const tr = document.querySelector('#salesItemsBody tr');
+        const quantity = Number(tr.querySelector('.quantityInput').value);
+        const price = Number(tr.querySelector('.priceInput').value);
+        const taxType = tr.querySelector('.taxTypeSelect').value;
 
-        // 강화된 수량 및 가격 검증
-        if (!quantity || quantity <= 0) {
-            alert('수량은 0보다 큰 숫자로 입력해주세요.');
+        if (!quantity || price === undefined || price === null) {
+            alert('수량과 단가를 올바르게 입력해주세요.');
             if(saveButton) { 
                 saveButton.disabled = false; 
                 saveButton.innerHTML = '<i class="bx bx-edit"></i> 수정'; 
@@ -739,28 +494,7 @@ export function saveSales() {
             return;
         }
 
-        if (price === undefined || price === null || price < 0) {
-            alert('단가는 0 이상의 숫자로 입력해주세요.');
-            if(saveButton) { 
-                saveButton.disabled = false; 
-                saveButton.innerHTML = '<i class="bx bx-edit"></i> 수정'; 
-            }
-            window.isSavingSales = false;
-            return;
-        }
-
-        // 금액 범위 검증 (1억원 초과 시 경고)
         const supplyAmount = quantity * price;
-        if (supplyAmount > 100000000) {
-            if (!confirm('공급가액이 1억원을 초과합니다. 계속하시겠습니까?')) {
-                if(saveButton) { 
-                    saveButton.disabled = false; 
-                    saveButton.innerHTML = '<i class="bx bx-edit"></i> 수정'; 
-                }
-                window.isSavingSales = false;
-                return;
-            }
-        }
         const taxAmount = taxType === 'taxable' ? supplyAmount * 0.1 : 0;
         const totalAmount = supplyAmount + taxAmount;
 
@@ -780,6 +514,7 @@ export function saveSales() {
             
             docRef.update(updatedSale).then(() => {
                 state.sales[index] = updatedSale;
+                saveCompanyData(businessNumber);
                 showToast('수정되었습니다.');
                 closeModal();
                 loadSalesTable(currentSalesPage);
@@ -797,6 +532,7 @@ export function saveSales() {
         } else {
             // Firebase가 없는 경우 localStorage만 저장
             state.sales[index] = updatedSale;
+            saveCompanyData(businessNumber);
             showToast('수정되었습니다.');
             closeModal();
             loadSalesTable(currentSalesPage);
@@ -812,13 +548,13 @@ export function saveSales() {
         // --- ✨ 생성 로직 ---
         const items = [];
         let hasError = false;
-        document.querySelectorAll('#transactionItemsBody tr').forEach(tr => {
-            const itemText = tr.querySelector('.item-search').value.trim();
+        document.querySelectorAll('#salesItemsBody tr').forEach(tr => {
+            const itemText = tr.querySelector('.itemSearch').value.trim();
             const codeMatch = itemText.match(/\(([^)]+)\)$/);
             const itemCode = codeMatch ? codeMatch[1] : '';
-            const quantity = Number(tr.querySelector('.quantity-input').value);
-            const price = Number(tr.querySelector('.price-input').value);
-            const taxType = tr.querySelector('.tax-type-select').value;
+            const quantity = Number(tr.querySelector('.quantityInput').value);
+            const price = Number(tr.querySelector('.priceInput').value);
+            const taxType = tr.querySelector('.taxTypeSelect').value;
             
             if (!itemCode && !quantity && !price) return;
             if (!itemCode || !quantity || price === undefined || price === null) hasError = true;
@@ -858,10 +594,14 @@ export function saveSales() {
 
             // Firestore에 일괄 저장
             batch.commit().then(async () => {
-                // 데이터 생성 로그 기록
+                state.sales.push(...salesToAdd);
+                saveCompanyData(businessNumber);
+                
+                // 매출 생성 로그 기록
                 try {
-                    await logAccess('CREATE_DATA', { 
-                        type: 'sales', 
+                    await logAccess('CREATE_DATA', {
+                        page: 'sales',
+                        action: 'createSales',
                         count: salesToAdd.length,
                         businessNumber: businessNumber
                     });
@@ -869,22 +609,11 @@ export function saveSales() {
                     console.error('매출 생성 로그 기록 실패:', error);
                 }
                 
-                state.sales.push(...salesToAdd);
                 showToast(`${salesToAdd.length}건의 매출이 등록되었습니다.`);
                 closeModal();
                 loadSalesTable(1); // 새 데이터가 추가되었으므로 첫 페이지로 이동
-            }).catch(async (e) => {
+            }).catch(e => {
                 console.error('Firestore 저장 오류:', e);
-                // 오류 로그 기록
-                try {
-                    await logErrorToFirestore(e, { 
-                        action: 'SAVE_SALES',
-                        businessNumber: businessNumber,
-                        itemsCount: items.length
-                    });
-                } catch (logError) {
-                    console.error('오류 로그 기록 실패:', logError);
-                }
                 showToast('저장 중 오류가 발생했습니다.', 'error');
             }).finally(() => {
                 window.isSavingSales = false;
@@ -907,6 +636,20 @@ export function saveSales() {
             });
             
             state.sales.push(...salesToAdd);
+            saveCompanyData(businessNumber);
+            
+            // 매출 생성 로그 기록
+            try {
+                await logAccess('CREATE_DATA', {
+                    page: 'sales',
+                    action: 'createSales',
+                    count: salesToAdd.length,
+                    businessNumber: businessNumber
+                });
+            } catch (error) {
+                console.error('매출 생성 로그 기록 실패:', error);
+            }
+            
             showToast(`${salesToAdd.length}건의 매출이 등록되었습니다.`);
             closeModal();
             loadSalesTable(1);
@@ -929,134 +672,4 @@ export function initSalesTab() {
     window.editSale = editSale;
     window.updateTotals = updateTotals;
     window.saveSales = saveSales;
-} 
-
-/**
- * 매출 모달의 히스토리 기능을 설정합니다.
- */
-function setupSalesHistory() {
-    const tbody = document.getElementById('transactionItemsBody');
-    if (!tbody) return;
-
-    // 거래처 선택 시 히스토리 기능 업데이트
-    const partnerInput = document.querySelector('input[name="partnerSearch"]');
-    if (partnerInput) {
-        partnerInput.addEventListener('change', () => {
-            console.log('거래처 선택됨:', window.selectedPartnerBusinessNumber);
-        });
-    }
-
-    // 품목 선택 시 히스토리 기능 설정
-    function setupItemSelection(row) {
-        const itemSearchInput = row.querySelector('.item-search');
-        const historyIcon = row.querySelector('.bx-history');
-        
-        if (!itemSearchInput) return;
-
-        let selectedItemId = null;
-
-        // 품목 선택 시 아이템 ID 저장 (여러 이벤트 리스너 추가)
-        itemSearchInput.addEventListener('change', () => {
-            updateSelectedItemId();
-        });
-
-        itemSearchInput.addEventListener('input', () => {
-            updateSelectedItemId();
-        });
-
-        itemSearchInput.addEventListener('blur', () => {
-            updateSelectedItemId();
-        });
-
-        function updateSelectedItemId() {
-            const itemText = itemSearchInput.value;
-            console.log('품목 입력값:', itemText);
-            
-            // 품목 코드 추출 (예: "품목명 (코드)" 형식에서 코드 추출)
-            const match = itemText.match(/\(([^)]+)\)$/);
-            if (match) {
-                selectedItemId = match[1];
-                console.log('품목 선택됨:', selectedItemId);
-            } else {
-                // 품목명으로 직접 검색
-                const item = state.items.find(i => i.name === itemText);
-                if (item) {
-                    selectedItemId = item.code;
-                    console.log('품목명으로 찾음:', selectedItemId);
-                } else {
-                    selectedItemId = null;
-                    console.log('품목을 찾을 수 없음');
-                }
-            }
-        }
-
-        // 히스토리 아이콘 이벤트 리스너
-        if (historyIcon) {
-            // 마우스 호버 이벤트
-            historyIcon.addEventListener('mouseenter', () => {
-                const currentPartnerId = window.selectedPartnerBusinessNumber;
-                console.log('히스토리 호버:', { currentPartnerId, selectedItemId });
-                
-                if (currentPartnerId && selectedItemId) {
-                    const recentData = getRecentSales(currentPartnerId, selectedItemId);
-                    if (recentData.length > 0) {
-                        showHistoryPopover(historyIcon, recentData);
-                    }
-                }
-            });
-
-            historyIcon.addEventListener('mouseleave', () => {
-                hideHistoryPopover();
-            });
-
-            // 클릭 이벤트 추가
-            historyIcon.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // 클릭 시점에 다시 품목 ID 확인
-                updateSelectedItemId();
-                
-                const currentPartnerId = window.selectedPartnerBusinessNumber;
-                console.log('히스토리 아이콘 클릭:', { currentPartnerId, selectedItemId });
-                
-                if (currentPartnerId && selectedItemId) {
-                    const recentData = getRecentSales(currentPartnerId, selectedItemId);
-                    console.log('최근 거래 데이터 조회 결과:', recentData);
-                    
-                    if (recentData.length > 0) {
-                        // 기존 팝오버가 있으면 제거, 없으면 표시
-                        const existingPopover = document.querySelector('.history-popover');
-                        if (existingPopover) {
-                            hideHistoryPopover();
-                        } else {
-                            showHistoryPopover(historyIcon, recentData);
-                        }
-                    } else {
-                        showToast('해당 거래처와 품목의 최근 거래내역이 없습니다.', 'info');
-                    }
-                } else {
-                    console.log('거래처 또는 품목 미선택으로 히스토리 표시 불가');
-                    showToast('거래처와 품목을 먼저 선택해주세요.', 'warning');
-                }
-            });
-        }
-    }
-
-    // 기존 행들에 대해 설정
-    const existingRows = tbody.querySelectorAll('tr');
-    existingRows.forEach(setupItemSelection);
-
-    // 새로운 행이 추가될 때마다 설정
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            mutation.addedNodes.forEach((node) => {
-                if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'TR') {
-                    setupItemSelection(node);
-                }
-            });
-        });
-    });
-
-    observer.observe(tbody, { childList: true });
 } 
